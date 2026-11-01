@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: shellcheck
+        run: shellcheck -x *.sh ci-runner-status
+      - name: test.sh
+        run: bash test.sh
+      - name: docker build
+        run: docker build --platform linux/amd64 .

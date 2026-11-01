@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# One-screen health check of the CI runner VM (Linux, systemd). Run with sudo: the journal, Docker and the token need it.
+# Exits 1 when an enabled ci-runner@ instance is not active. Never prints the token.
+set -uo pipefail
+
+ENV_FILE=${ENV_FILE:-/etc/ci-runner/env}
+if [ -z "${OWNER:-}" ] && [ -r "$ENV_FILE" ]; then
+  OWNER=$(sed -n 's/^OWNER=//p' "$ENV_FILE" | tail -n 1)
+fi
+OWNER=${OWNER:-}
+[ -n "$OWNER" ] || { echo "OWNER is not set: put OWNER=<account> in $ENV_FILE" >&2; exit 1; }
+TOKEN_FILE=${TOKEN_FILE:-/etc/ci-runner/token}
+WANTS_DIR=${WANTS_DIR:-/etc/systemd/system/multi-user.target.wants}
+bad=0
+[ "$(id -u)" -eq 0 ] || echo "warning: not root; journal, Docker and token output may be missing" >&2
+
+instances=$(for f in "$WANTS_DIR"/ci-runner@*.service; do [ -L "$f" ] || continue; f=${f##*/ci-runner@}; echo "${f%.service}"; done)
+[ -n "$instances" ] || { echo "no enabled ci-runner@ instance" >&2; bad=1; }
+
+echo "== instances"
+for repo in $instances; do
+  props=$(systemctl show "ci-runner@$repo" -p ActiveState -p SubState -p NRestarts -p Result -p ExecMainStatus)
+  get() { sed -n "s/^$1=//p" <<<"$props"; }
+  state=$(get ActiveState)
+  printf '%-30s %s/%s restarts=%s result=%s exit=%s\n' "$repo" "$state" "$(get SubState)" \
+    "$(get NRestarts)" "$(get Result)" "$(get ExecMainStatus)"
+  if [ "$state" != active ]; then
+    echo "  NOT ACTIVE: systemctl status ci-runner@$repo; no job will start here, and GitHub sends no alert for it"
+    bad=1
+  fi
+  journalctl -u "ci-runner@$repo" --since '24 hours ago' -o short-iso --no-pager -q 2>&1 \
+    | grep -E 'generate-jitconfig failed|exited non-zero|refusing|cannot look up' \
+    | tail -n 5 | sed 's/^/  /' || true
+done
+
+echo "== disk"
+for path in / /var/lib/docker /var/lib/sysbox; do
+  [ -d "$path" ] || continue
+  df -hP "$path" | awk -v p="$path" 'NR==2 {printf "%-18s %s used of %s (%s), %s free\n", p, $3, $2, $5, $4}'
+done
+
+echo "== memory"
+free -h | sed -n '1,2p'
+
+echo "== runner containers (idle or running a job)"
+if containers=$(docker ps --filter label=ci-runner.repo --format '{{.Label "ci-runner.repo"}}' 2>&1); then
+  if [ -n "$containers" ]; then sort <<<"$containers" | uniq -c; else echo "none"; fi
+else
+  echo "docker not readable: $containers"
+fi
+
+if [ -r "$TOKEN_FILE" ] && command -v gh >/dev/null 2>&1; then
+  echo "== registered runners"
+  GH_TOKEN=$(<"$TOKEN_FILE")
+  export GH_TOKEN
+  for repo in $instances; do
+    echo "$repo"
+    gh api "repos/$OWNER/$repo/actions/runners" --jq '.runners[] | "\(.name) \(.status) busy=\(.busy)"' 2>&1 \
+      | sed 's/^/  /' || true
+  done
+fi
+
+exit "$bad"

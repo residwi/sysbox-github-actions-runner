@@ -1,0 +1,13 @@
+[Unit]
+Description=CI runner egress filter
+Requires=docker.service
+After=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/ci-runner/firewall.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,19 @@
+[Unit]
+Description=Ephemeral GitHub Actions runner loop for %i
+After=docker.service sysbox.service ci-firewall.service network-online.target
+Requires=docker.service ci-firewall.service
+Wants=network-online.target
+
+[Service]
+User=ci-runner
+EnvironmentFile=-/etc/ci-runner/env
+EnvironmentFile=-/etc/ci-runner/%i.env
+ExecStart=/opt/ci-runner/run.sh %i
+SyslogIdentifier=ci-runner-%i
+Restart=always
+RestartSec=10
+# run.sh exits 78 for a public repository or a bad name: stay stopped instead of restarting.
+RestartPreventExitStatus=78
+
+[Install]
+WantedBy=multi-user.target
