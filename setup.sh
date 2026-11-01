@@ -22,7 +22,8 @@ export DEBIAN_FRONTEND=noninteractive
 APT=(apt-get -o DPkg::Lock::Timeout=600 -y -q)
 
 [ "$(id -u)" -eq 0 ] || { echo "run as root" >&2; exit 1; }
-exec > >(tee -a "$LOG") 2>&1
+# A re-exec (below) already writes through the first run's tee.
+[ -n "${CI_RUNNER_REEXEC:-}" ] || exec > >(tee -a "$LOG") 2>&1
 STEP=start
 log() { echo "$(date -u +%FT%TZ) $*"; }
 step() { STEP=$1; log "step: $1"; }
@@ -63,6 +64,11 @@ install_packages() {
   git -C "$KIT" fetch -q --depth 1 origin "$KIT_REF"
   git -C "$KIT" checkout -q --force FETCH_HEAD
   log "kit commit $(git -C "$KIT" rev-parse HEAD)"
+  # This run's functions come from the copy that started it, maybe an older one: continue with the checked-out copy.
+  if [ -z "${CI_RUNNER_REEXEC:-}" ]; then
+    log "continuing with the checked-out setup.sh"
+    exec env OWNER="$OWNER" KIT_REF="$KIT_REF" CI_RUNNER_REEXEC=1 bash "$KIT/setup.sh"
+  fi
 
   step "docker"
   install -m 0755 -d /etc/apt/keyrings
