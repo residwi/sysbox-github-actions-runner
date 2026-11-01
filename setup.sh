@@ -99,8 +99,9 @@ EOT
   systemctl enable --now ci-firewall
 
   step "image"
-  # --no-cache: a cached layer would keep the image's old Docker.
-  docker build --no-cache --platform linux/amd64 -t ci-runner:local "$KIT"
+  # --no-cache: a cached layer would keep the image's old Docker. --network host: the egress filter blocks the
+  # cloud resolver (169.254.x on OCI, AWS, GCP) for docker0, so RUN steps use the host's resolver instead.
+  docker build --no-cache --network host --platform linux/amd64 -t ci-runner:local "$KIT"
 
   step "runner user, loop, unit, journal, status command, OWNER, KIT_REF"
   id ci-runner >/dev/null 2>&1 || useradd --system --create-home --groups docker ci-runner
@@ -123,7 +124,7 @@ verify() {
 
   step "sysbox smoke test (nested docker)"
   docker rm -f sysbox-smoke >/dev/null 2>&1 || true
-  docker run -d --pull always --runtime=sysbox-runc --name sysbox-smoke "$SMOKE_IMAGE" >/dev/null
+  docker run -d --pull always --runtime=sysbox-runc --dns 1.1.1.1 --dns 8.8.8.8 --name sysbox-smoke "$SMOKE_IMAGE" >/dev/null
   for _ in $(seq 60); do docker exec sysbox-smoke docker info >/dev/null 2>&1 && break; sleep 2; done
   docker exec sysbox-smoke docker info >/dev/null
   docker exec sysbox-smoke docker run --rm hello-world | grep 'Hello from Docker!' >/dev/null
