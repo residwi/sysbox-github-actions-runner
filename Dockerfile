@@ -26,10 +26,11 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # Docker unpinned: apt checks the repository's signature, and DOCKER_KEY_FPR the key (same as setup.sh).
+# The key file must hold that one key only: apt trusts every key in a signed-by file.
 RUN set -eux; \
     install -m 0755 -d /etc/apt/keyrings; \
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc; \
-    gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc | grep "^fpr:::::::::${DOCKER_KEY_FPR}:"; \
+    test "$(gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc | awk -F: '$1=="pub"{p=1;next} p&&$1=="fpr"{print $10;p=0}')" = "$DOCKER_KEY_FPR"; \
     echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" \
       >/etc/apt/sources.list.d/docker.list; \
     apt-get update; \

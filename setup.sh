@@ -67,8 +67,9 @@ install_packages() {
   step "docker"
   install -m 0755 -d /etc/apt/keyrings
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-  gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc | grep "^fpr:::::::::${DOCKER_KEY_FPR}:" >/dev/null \
-    || { echo "Docker apt key fingerprint mismatch" >&2; exit 1; }
+  # Exactly one primary key, Docker's: apt trusts every key in a signed-by file.
+  [ "$(gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc | awk -F: '$1=="pub"{p=1;next} p&&$1=="fpr"{print $10;p=0}')" = "$DOCKER_KEY_FPR" ] \
+    || { echo "Docker apt key: expected only $DOCKER_KEY_FPR" >&2; exit 1; }
   chmod a+r /etc/apt/keyrings/docker.asc
   cat >/etc/apt/sources.list.d/docker.sources <<EOT
 Types: deb
