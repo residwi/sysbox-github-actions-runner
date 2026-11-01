@@ -31,7 +31,7 @@ One fine-grained personal access token covers every served repository:
 
 ## Install
 
-1. Edit the top of `setup.sh`: `OWNER` (required: the GitHub account that owns the repositories) and `KIT_REF` (a tag or full commit SHA of <https://github.com/residwi/sysbox-github-actions-runner>; leave it empty and `main` is used, with a warning; it moves). `setup.sh` clones this public repository over https at that ref, so the user-data holds no credential and no token.
+1. Edit the top of `setup.sh`: `OWNER` (required: the GitHub account that owns the repositories) and `KIT_REF` (a full commit SHA of <https://github.com/residwi/sysbox-github-actions-runner>, so the VM gets exactly the code you reviewed; leave it empty and `main` is used, with a warning; it moves). `setup.sh` clones this public repository over https at that ref, so the user-data holds no credential and no token.
 2. Create the VM (see Cloud notes) with `setup.sh` as user-data. Or, on an existing 24.04 VM: `sudo bash setup.sh`.
 3. On the VM, wait and check:
 

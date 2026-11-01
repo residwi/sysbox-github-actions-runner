@@ -6,7 +6,7 @@
 set -euo pipefail
 
 # Edit the defaults before use, e.g. OWNER=${OWNER:-myaccount}. OWNER: the GitHub account that owns the served repositories (required).
-# KIT_REF: a tag or full commit SHA of the kit, e.g. KIT_REF=${KIT_REF:-v1.0.0}. Left empty it falls back to `main`,
+# KIT_REF: a full commit SHA of the kit, e.g. KIT_REF=${KIT_REF:-<40-char sha>}. Left empty it falls back to `main`,
 # which moves; a re-run reuses the ref stored in /etc/ci-runner/env.
 OWNER=${OWNER:-}
 KIT_REF=${KIT_REF:-}
@@ -45,7 +45,7 @@ install_packages() {
   [[ $OWNER =~ ^[A-Za-z0-9-]+$ ]] || { echo "OWNER is required: a GitHub account name" >&2; exit 1; }
   if [ -z "$KIT_REF" ] && [ -r /etc/ci-runner/env ]; then KIT_REF=$(sed -n 's/^KIT_REF=//p' /etc/ci-runner/env | tail -n 1); fi
   if [ -z "$KIT_REF" ]; then
-    log "warning: KIT_REF is not set and none is stored; using main, which moves. Pin a tag or commit SHA."
+    log "warning: KIT_REF is not set and none is stored; using main, which moves. Pin a commit SHA."
     KIT_REF=main
   fi
 
