@@ -93,9 +93,30 @@ A kernel or Sysbox escape would expose the token and every served repository, so
 
 - Rotate the token before it expires. An expired token shows as `generate-jitconfig failed` or `cannot look up` in the journal.
 - Security updates install unattended. The VM reboots at 04:00 (VM time) only when an update requires it, and that cancels running jobs. After a kernel upgrade run `sudo bash /usr/local/src/ci-runner/setup.sh verify`.
-- To update the kit, Docker or Sysbox: publish a new tag, run `sudo KIT_REF=<new ref> bash /usr/local/src/ci-runner/setup.sh` (the new ref is stored for later re-runs), then restart the instances when no job runs.
+- To update the VM, see Versions.
 
 `bash test.sh` checks `run.sh`'s guards (public repository, bad name, Sysbox label) with fake `gh` and `docker`; it needs neither Docker nor network.
+
+## Versions
+
+Every version is pinned, with a checksum where the publisher gives one. Dependabot updates two of them; the rest are bumped by hand.
+
+| Pin | File | How it updates |
+|---|---|---|
+| Ubuntu 24.04 base digest | `Dockerfile` `FROM` | Dependabot, weekly. Release bumps (26.04) are ignored on purpose. |
+| GitHub Actions in this repo's CI | `.github/workflows/ci.yml` | Dependabot, weekly. |
+| Actions runner | `Dockerfile` `RUNNER_VERSION`, `RUNNER_SHA256` | By hand. The SHA-256 is in the [release notes](https://github.com/actions/runner/releases). Bump at least monthly: GitHub stops sending jobs to runners that fall too far behind. |
+| `gh` in the image | `Dockerfile` `GH_VERSION`, `GH_SHA256` | By hand. The SHA-256 is in the release's `gh_<version>_checksums.txt` ([releases](https://github.com/cli/cli/releases)). |
+| Docker in the image | `Dockerfile` `DOCKER_VERSION`, `DOCKER_SHA256` | By hand. Docker publishes no checksum for the static build: `curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-<version>.tgz \| sha256sum`. |
+| Docker on the host | `setup.sh` `DOCKER_VERSION` | By hand: `apt-cache madison docker-ce` on the VM lists the versions. Keep it equal to the image's Docker, and `SMOKE_IMAGE` to the same version. |
+| Sysbox on the host | `setup.sh` `SYSBOX_VERSION`, `SYSBOX_SHA256` | By hand. The SHA-256 is in the [release notes](https://github.com/nestybox/sysbox/releases). Check the release supports Ubuntu 24.04 and the VM's kernel. |
+| Docker apt key | `setup.sh` `DOCKER_KEY_FPR` | Only if Docker rotates its key; `setup.sh` fails at "docker" when it no longer matches. |
+
+To bump a version by hand:
+
+1. Change the version and its checksum together, in one commit, and push. CI runs `shellcheck`, `test.sh` and the image build, so a wrong checksum fails there.
+2. On the VM, once CI passes: `sudo KIT_REF=<new commit SHA> bash /usr/local/src/ci-runner/setup.sh`. It rebuilds the image, re-runs every check and stores the new ref for later re-runs.
+3. When no job runs, restart the loops so they use the new image: `sudo systemctl restart 'ci-runner@*'`.
 
 ## Monitoring
 

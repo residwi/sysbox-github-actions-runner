@@ -8,3 +8,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Stay on Ubuntu 24.04: Sysbox v0.7.1 documents 24.04 (it failed on 26.04, kernel 7.0).
+      # Digest updates within 24.04 still arrive.
+      - dependency-name: ubuntu
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
