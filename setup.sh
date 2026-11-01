@@ -14,11 +14,10 @@ KIT_REPO=https://github.com/residwi/sysbox-github-actions-runner.git
 
 KIT=/usr/local/src/ci-runner
 LOG=/var/log/ci-runner-setup.log
-DOCKER_VERSION='5:29.9.2-1~ubuntu.24.04~noble'
 DOCKER_KEY_FPR=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 SYSBOX_VERSION=0.7.1
 SYSBOX_SHA256=9d6d5484f980d0a17f86c492c1262015c2afb66280bdb97215b79fde6a0261c5
-SMOKE_IMAGE=docker:29.9.2-dind
+SMOKE_IMAGE=docker:dind
 export DEBIAN_FRONTEND=noninteractive
 APT=(apt-get -o DPkg::Lock::Timeout=600 -y -q)
 
@@ -80,7 +79,8 @@ Architectures: amd64
 Signed-By: /etc/apt/keyrings/docker.asc
 EOT
   "${APT[@]}" update
-  "${APT[@]}" install "docker-ce=$DOCKER_VERSION" "docker-ce-cli=$DOCKER_VERSION" containerd.io docker-buildx-plugin
+  # Unpinned: a re-run upgrades to the latest, and the upgrade restarts dockerd, which stops running jobs.
+  "${APT[@]}" install docker-ce docker-ce-cli containerd.io docker-buildx-plugin
 
   step "sysbox"
   if ! dpkg-query -W -f='${Version}' sysbox-ce 2>/dev/null | grep "^${SYSBOX_VERSION}" >/dev/null; then
@@ -98,7 +98,8 @@ EOT
   systemctl enable --now ci-firewall
 
   step "image"
-  docker build --platform linux/amd64 -t ci-runner:local "$KIT"
+  # --no-cache: a cached layer would keep the image's old Docker.
+  docker build --no-cache --platform linux/amd64 -t ci-runner:local "$KIT"
 
   step "runner user, loop, unit, journal, status command, OWNER, KIT_REF"
   id ci-runner >/dev/null 2>&1 || useradd --system --create-home --groups docker ci-runner
@@ -121,7 +122,7 @@ verify() {
 
   step "sysbox smoke test (nested docker)"
   docker rm -f sysbox-smoke >/dev/null 2>&1 || true
-  docker run -d --runtime=sysbox-runc --name sysbox-smoke "$SMOKE_IMAGE" >/dev/null
+  docker run -d --pull always --runtime=sysbox-runc --name sysbox-smoke "$SMOKE_IMAGE" >/dev/null
   for _ in $(seq 60); do docker exec sysbox-smoke docker info >/dev/null 2>&1 && break; sleep 2; done
   docker exec sysbox-smoke docker info >/dev/null
   docker exec sysbox-smoke docker run --rm hello-world | grep 'Hello from Docker!' >/dev/null

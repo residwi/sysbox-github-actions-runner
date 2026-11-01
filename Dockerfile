@@ -1,14 +1,13 @@
 # Single-use GitHub Actions runner with its own Docker daemon, meant for `--runtime=sysbox-runc`.
-# Versions: actions/runner v2.338.2, cli/cli v2.103.3, moby docker-v29.9.2 (static build from
-# download.docker.com), Ubuntu 24.04 index digest. Build for linux/amd64.
+# Versions: actions/runner v2.338.2, cli/cli v2.103.3, Ubuntu 24.04 index digest; Docker is the latest from
+# Docker's apt repository at build time. Build for linux/amd64.
 FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
 
 ARG RUNNER_VERSION=2.338.2
 ARG RUNNER_SHA256=baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
 ARG GH_VERSION=2.103.3
 ARG GH_SHA256=4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d
-ARG DOCKER_VERSION=29.9.2
-ARG DOCKER_SHA256=9ac225999fd5e863f7694c728ef23d480616b1e5639328fa309befd4243d69eb
+ARG DOCKER_KEY_FPR=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 
 # RUNNER_MANUALLY_TRAP_SIG and ACTIONS_RUNNER_PRINT_LOG_TO_STDOUT as in the upstream image
 # (actions/runner v2.338.2 images/Dockerfile): stop signals reach the runner, logs reach docker logs.
@@ -26,19 +25,25 @@ RUN apt-get update \
        sudo unzip xz-utils zstd jq python3 \
  && rm -rf /var/lib/apt/lists/*
 
+# Docker unpinned: apt checks the repository's signature, and DOCKER_KEY_FPR the key (same as setup.sh).
 RUN set -eux; \
-    curl -fsSL -o /tmp/docker.tgz "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz"; \
-    echo "${DOCKER_SHA256}  /tmp/docker.tgz" | sha256sum -c -; \
-    tar -xzf /tmp/docker.tgz -C /usr/local/bin --strip-components=1; \
+    install -m 0755 -d /etc/apt/keyrings; \
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc; \
+    gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc | grep "^fpr:::::::::${DOCKER_KEY_FPR}:"; \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" \
+      >/etc/apt/sources.list.d/docker.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io; \
+    rm -rf /var/lib/apt/lists/*; \
     curl -fsSL -o /tmp/gh.tgz "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz"; \
     echo "${GH_SHA256}  /tmp/gh.tgz" | sha256sum -c -; \
     tar -xzf /tmp/gh.tgz -C /usr/local --strip-components=1 "gh_${GH_VERSION}_linux_amd64/bin/gh"; \
-    rm /tmp/docker.tgz /tmp/gh.tgz
+    rm /tmp/gh.tgz
 
 # Passwordless sudo grants nothing new: runner is already root-equivalent inside this throwaway container
 # through its docker group (the inner dockerd is root-owned).
-RUN groupadd docker \
- && useradd --create-home --shell /bin/bash --groups docker runner \
+# The docker group comes from the docker-ce package.
+RUN useradd --create-home --shell /bin/bash --groups docker runner \
  && echo 'runner ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/runner \
  && chmod 0440 /etc/sudoers.d/runner
 
