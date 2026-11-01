@@ -1,7 +1,7 @@
 # Single-use GitHub Actions runner with its own Docker daemon, meant for `--runtime=sysbox-runc`.
 # Versions: actions/runner v2.338.2, cli/cli v2.103.3, moby docker-v29.9.2 (static build from
 # download.docker.com), Ubuntu 24.04 index digest. Build for linux/amd64.
-FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c
 
 ARG RUNNER_VERSION=2.338.2
 ARG RUNNER_SHA256=baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
