@@ -27,7 +27,7 @@ exec > >(tee -a "$LOG") 2>&1
 STEP=start
 log() { echo "$(date -u +%FT%TZ) $*"; }
 step() { STEP=$1; log "step: $1"; }
-# shellcheck disable=SC2329 # run by the EXIT trap
+# shellcheck disable=SC2317,SC2329 # run by the EXIT trap
 finish() {
   local rc=$?
   docker rm -f sysbox-smoke >/dev/null 2>&1 || true
