@@ -61,6 +61,12 @@ RUNNER_COUNT=3 FAKE_RUNS=3 run_kit private privrepo
 names=$(grep '^run ' "$tmp/docker.log" | grep -o -- '--name [^ ]*' | sort -u | wc -l)
 if [ "$names" -eq 3 ]; then check "RUNNER_COUNT=3: three runners, distinct names" ok; else check "RUNNER_COUNT=3: three runners, distinct names (got $names)" no; fi
 
+RUNNER_COUNT=3 run_kit public pubrepo
+# Two cleanups: at start and on exit, so no other worker's runner stays registered.
+if [ "$rc" -eq 78 ] && [ "$(grep -c '^ps -aq --filter label=ci-runner.repo=fakeowner/pubrepo' "$tmp/docker.log")" -eq 2 ]; then
+  check "RUNNER_COUNT=3, public repo: exit 78, containers removed on exit" ok
+else check "RUNNER_COUNT=3, public repo: exit 78, containers removed on exit (rc=$rc)" no; fi
+
 RUNNER_COUNT=0 run_kit private privrepo
 if [ "$rc" -eq 78 ] && [ ! -s "$tmp/docker.log" ] && [ ! -s "$tmp/gh.log" ]; then check "RUNNER_COUNT=0: exit 78, nothing called" ok; else check "RUNNER_COUNT=0: exit 78, nothing called (rc=$rc)" no; fi
 

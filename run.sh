@@ -42,7 +42,10 @@ check_private() {
 dns=()
 for server in $DNS_SERVERS; do dns+=(--dns "$server"); done
 
-docker ps -aq --filter "label=ci-runner.repo=$OWNER/$REPO" | while read -r id; do docker rm -f "$id" >/dev/null; done
+remove_containers() {
+  docker ps -aq --filter "label=ci-runner.repo=$OWNER/$REPO" | while read -r id; do docker rm -f "$id" >/dev/null; done
+}
+remove_containers
 
 worker() {
   while true; do
@@ -86,8 +89,10 @@ worker() {
 }
 
 for _ in $(seq "$RUNNER_COUNT"); do worker & done
-# A worker only ends on exit 78 or an error: end the unit so systemd restarts every worker (or, on 78, stays stopped),
-# and the cleanup above removes containers left behind.
+# A worker only ends on exit 78 or an error: end the unit so systemd restarts every worker (or, on 78, stays stopped).
+# On any exit, stop the other workers' containers: on 78 their idle runners would stay registered for a public repository.
+trap 'exit 143' TERM
+trap remove_containers EXIT
 rc=0
 wait -n || rc=$?
 jobs -p | while read -r pid; do kill "$pid" 2>/dev/null || true; done
