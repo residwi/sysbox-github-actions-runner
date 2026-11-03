@@ -96,5 +96,5 @@ trap remove_containers EXIT
 rc=0
 wait -n || rc=$?
 jobs -p | while read -r pid; do kill "$pid" 2>/dev/null || true; done
-wait || true
+wait
 exit "$rc"
