@@ -74,7 +74,7 @@ The repository must be private and owned by `OWNER`. `<repo>` is the bare name.
 
 4. Under the repository's Settings, Actions, Runners, check an idle `sysbox-<repo>-...` runner, then run a job.
 
-Never give the `sysbox` label to a runner outside this container; only `run.sh` applies it. Each instance runs one job at a time, so one repository's jobs queue while different repositories run side by side. A restart (`sudo systemctl restart 'ci-runner@*'`) cancels running jobs; do it when none run, for example after an image rebuild.
+Never give the `sysbox` label to a runner outside this container; only `run.sh` applies it. Each instance runs `RUNNER_COUNT` jobs at a time (default 1, see Limits); more jobs of that repository queue, while different repositories run side by side. A restart (`sudo systemctl restart 'ci-runner@*'`) cancels running jobs; do it when none run, for example after an image rebuild.
 
 ## Remove a repository
 
@@ -87,7 +87,7 @@ Then drop `<repo>` from the token's access. One idle runner stays registered unt
 
 ## Limits
 
-Each runner container gets `--memory 6g --pids-limit 4096`, starting points rather than measurements. Settings are plain `NAME=value` lines (mode 600, no quotes) in `/etc/ci-runner/env` (all instances) and `/etc/ci-runner/<repo>.env` (one, wins); `sudo systemctl restart ci-runner@<repo>` applies them: `RUNNER_MEMORY=8g`, `RUNNER_PIDS_LIMIT=8192`, `DNS_SERVERS=9.9.9.9 1.1.1.1`. Size the VM for about `RUNNER_MEMORY` times the number of instances plus the host's needs; `--memory` is a cap, so a smaller VM starts but ends in OOM kills when every instance is busy. Watch `sudo docker stats` during a `Test` run.
+Each runner container gets `--memory 6g --pids-limit 4096`, starting points rather than measurements. Settings are plain `NAME=value` lines (mode 600, no quotes) in `/etc/ci-runner/env` (all instances) and `/etc/ci-runner/<repo>.env` (one, wins); `sudo systemctl restart ci-runner@<repo>` applies them: `RUNNER_MEMORY=8g`, `RUNNER_PIDS_LIMIT=8192`, `DNS_SERVERS=9.9.9.9 1.1.1.1`, `RUNNER_COUNT=3` (jobs of that repository run at once, each in its own container; 1 to 99). Size the VM for about `RUNNER_MEMORY` times the total `RUNNER_COUNT` of all instances plus the host's needs; `--memory` is a cap, so a smaller VM starts but ends in OOM kills when every instance is busy. Watch `sudo docker stats` during a `Test` run.
 
 ## Maintenance
 
@@ -97,7 +97,7 @@ A kernel or Sysbox escape would expose the token and every served repository, so
 - Security updates install unattended. The VM reboots at 04:00 (VM time) only when an update requires it, and that cancels running jobs. After a kernel upgrade run `sudo bash /usr/local/src/ci-runner/setup.sh verify`.
 - To update the VM, see Versions.
 
-`bash test.sh` checks `run.sh`'s guards (public repository, bad name, Sysbox label) with fake `gh` and `docker`; it needs neither Docker nor network.
+`bash test.sh` checks `run.sh`'s guards (public repository, bad name, Sysbox label, `RUNNER_COUNT`) with fake `gh` and `docker`; it needs neither Docker nor network, but bash 4.3 or newer (on macOS, `brew install bash`).
 
 ## Versions
 
