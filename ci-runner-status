@@ -40,7 +40,7 @@ for path in / /var/lib/docker /var/lib/sysbox; do
 done
 
 echo "== memory"
-free -h | sed -n '1,2p'
+free -h | sed -n '1,3p'
 
 echo "== runner containers (idle or running a job)"
 if containers=$(docker ps --filter label=ci-runner.repo --format '{{.Label "ci-runner.repo"}}' 2>&1); then

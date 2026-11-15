@@ -18,6 +18,8 @@ DOCKER_KEY_FPR=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 SYSBOX_VERSION=0.7.1
 SYSBOX_SHA256=9d6d5484f980d0a17f86c492c1262015c2afb66280bdb97215b79fde6a0261c5
 SMOKE_IMAGE=docker:dind
+# Jobs spill into swap instead of being OOM-killed when they peak together. Skipped if the VM already has swap.
+SWAP_SIZE=8G
 export DEBIAN_FRONTEND=noninteractive
 APT=(apt-get -o DPkg::Lock::Timeout=600 -y -q)
 
@@ -70,6 +72,15 @@ install_packages() {
     exec env OWNER="$OWNER" KIT_REF="$KIT_REF" CI_RUNNER_REEXEC=1 bash "$KIT/setup.sh"
   fi
 
+  step "swap"
+  if [ -z "$(swapon --noheadings --show)" ]; then
+    [ -f /swapfile ] || fallocate -l "$SWAP_SIZE" /swapfile || { rm -f /swapfile; echo "no room for $SWAP_SIZE swap" >&2; exit 1; }
+    chmod 600 /swapfile
+    mkswap /swapfile >/dev/null
+    swapon /swapfile
+    grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >>/etc/fstab
+  fi
+
   step "docker"
   install -m 0755 -d /etc/apt/keyrings
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
@@ -119,6 +130,9 @@ EOT
   touch /etc/ci-runner/env
   sed -i '/^OWNER=/d;/^KIT_REF=/d' /etc/ci-runner/env
   printf '%s\n' "OWNER=$OWNER" "KIT_REF=$KIT_REF" >>/etc/ci-runner/env
+  # Each job may use all RAM but 2 GiB kept for the host; jobs share it. Written once: an edited value stays.
+  grep -q '^RUNNER_MEMORY=' /etc/ci-runner/env \
+    || awk '/^MemTotal:/ {m = int($2 / 1024) - 2048; print "RUNNER_MEMORY=" (m < 1024 ? 1024 : m) "m"}' /proc/meminfo >>/etc/ci-runner/env
   systemctl daemon-reload
   systemctl restart systemd-journald
 }
